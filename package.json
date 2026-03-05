@@ -1,0 +1,11 @@
+{
+  "name": "mixing-dynamics-test",
+  "version": "1.0.0",
+  "description": "Interactive mixing dynamics skill test",
+  "scripts": {
+    "dev": "npx live-server --port=5555"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}

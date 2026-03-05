@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mixing Dynamics Test</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div id="screen-loading" class="screen">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Loading audio...</p>
+      <div class="loading-bar">
+        <div class="loading-bar-fill" id="loading-progress"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Welcome Screen -->
+  <div id="screen-welcome" class="screen active">
+    <div class="welcome-content">
+      <h1 class="welcome-title">Mixing Dynamics Test</h1>
+      <p class="welcome-subtitle">Check your dynamics processing skills</p>
+      <div class="welcome-info">
+        <div class="info-item">
+          <span class="info-number">20</span>
+          <span class="info-label">questions</span>
+        </div>
+        <div class="info-item">
+          <span class="info-number">6</span>
+          <span class="info-label">types</span>
+        </div>
+        <div class="info-item">
+          <span class="info-number">~15</span>
+          <span class="info-label">min</span>
+        </div>
+      </div>
+      <p class="welcome-desc">Theory, ear training, compressor matching, multiband and sidechain challenges.</p>
+      <button id="start-btn" class="btn btn-primary">Start Test</button>
+      <button id="continue-btn" class="btn btn-secondary" hidden>Continue</button>
+    </div>
+  </div>
+
+  <!-- Question Screen -->
+  <div id="screen-question" class="screen">
+    <div class="question-header">
+      <div class="progress-info">
+        <span id="question-counter">1 / 20</span>
+        <span id="question-difficulty" class="difficulty-badge">beginner</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+    </div>
+    <div id="question-container" class="question-container"></div>
+  </div>
+
+  <!-- Results Screen -->
+  <div id="screen-results" class="screen">
+    <div id="results-container" class="results-container"></div>
+  </div>
+
+  <!-- Mascot (always visible overlay) -->
+  <div id="mascot" class="mascot" hidden>
+    <div class="mascot-body" id="mascot-body"></div>
+    <div class="mascot-bubble" id="mascot-bubble" hidden>
+      <p class="mascot-text" id="mascot-text"></p>
+    </div>
+    <button class="mascot-minimize" id="mascot-minimize" title="Hide mascot">_</button>
+  </div>
+
+  <script src="data/questions.js"></script>
+  <script src="data/scoring-rules.js"></script>
+  <script src="data/mascot-dialogue.js"></script>
+  <script src="js/audio-engine.js"></script>
+  <script src="js/compressor-ui.js"></script>
+  <script src="js/mascot.js"></script>
+  <script src="js/scoring.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
