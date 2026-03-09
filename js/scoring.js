@@ -1,4 +1,4 @@
-// ─── Scoring System ───
+// Scoring System
 var Scoring = (function() {
   var answers = [];
   var startTime = 0;
@@ -12,9 +12,8 @@ var Scoring = (function() {
     var multiplier = SCORING_RULES.difficultyMultipliers[difficulty] || 1;
     var score = correct ? Math.round(points * multiplier) : 0;
 
-    // Time bonus for correct answers
     if (correct && SCORING_RULES.timeBonus.enabled && timeSpent !== undefined) {
-      var timeLimit = 60; // default
+      var timeLimit = 60;
       var bonusFactor = Math.max(0, 1 - timeSpent / timeLimit);
       score += Math.round(points * multiplier * SCORING_RULES.timeBonus.maxBonusPercent / 100 * bonusFactor);
     }
@@ -116,18 +115,17 @@ var Scoring = (function() {
     var cats = SCORING_RULES.categories;
 
     var text = 'Mixing Dynamics Test\n';
-    text += 'Level: ' + level.labelRu + ' (' + percent + '%)\n';
+    text += level.label + ' (' + percent + '%)\n';
 
     Object.keys(cats).forEach(function(key) {
       var b = breakdown[key];
       var catPercent = b.max > 0 ? Math.round(b.score / b.max * 100) : 0;
-      text += cats[key].icon + ' ' + cats[key].labelRu + ': ' + catPercent + '% ';
+      text += cats[key].icon + ' ' + cats[key].label + ': ' + catPercent + '% ';
     });
 
     return text.trim();
   }
 
-  // LocalStorage persistence
   function saveProgress(currentIndex) {
     try {
       localStorage.setItem('mdt-progress', JSON.stringify({

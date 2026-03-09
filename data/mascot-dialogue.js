@@ -1,78 +1,83 @@
 const MASCOT_DIALOGUE = {
   test_start: [
-    'Ready to test your ears? Let\'s go!',
-    'Hey! Let\'s find out how well you know dynamics.',
-    'Time to check your compression skills!'
+    'Готов проверить свои уши? Поехали!',
+    'Давай узнаем, как хорошо ты знаешь динамику.',
+    'Время проверить навыки компрессии!'
   ],
   question_theory: [
-    'Think it through...',
-    'Read all options carefully.',
-    'Remember the basics.'
+    'Подумай хорошенько...',
+    'Прочитай все варианты внимательно.',
+    'Вспомни основы.'
   ],
   question_audio: [
-    'Hit Play and listen closely!',
-    'Try listening a few times.',
-    'Compare A and B carefully.'
+    'Нажми Play и слушай внимательно!',
+    'Попробуй послушать несколько раз.',
+    'Сравни A и B внимательно.'
   ],
   question_interactive: [
-    'Turn the knobs and hear the difference!',
-    'Start with threshold, then dial in ratio.',
-    'Use A/B to compare with the target.'
+    'Крути ручки и слушай разницу!',
+    'Начни с threshold, потом подбери ratio.',
+    'Используй A/B для сравнения с целью.'
   ],
   question_multiband: [
-    'Three bands, three characters. Listen to each.',
-    'Find the problem range first.',
-    'Low, mid, high — each needs its own treatment.'
+    'Три полосы, три характера. Слушай каждую.',
+    'Сначала найди проблемный диапазон.',
+    'Low, mid, high — каждому нужна своя обработка.'
   ],
   question_sidechain: [
-    'Hear the kick pushing the bass? Dial it in!',
-    'Sidechain is a dance between two instruments.',
-    'Listen for the pumping effect.'
+    'Слышишь, как бочка продавливает бас? Настрой!',
+    'Сайдчейн — это танец двух инструментов.',
+    'Слушай эффект «пампинга».'
+  ],
+  question_diagnostic: [
+    'Представь, что ты в студии. Какое решение?',
+    'Каждая проблема имеет своё решение.',
+    'Подумай как микс-инженер.'
   ],
   correct_answer: [
-    'Nailed it! You feel the compression.',
-    'Correct! Your ears don\'t lie.',
-    'Yes! Right on target.',
-    'Perfect! You really know this.'
+    'Точно! Ты чувствуешь компрессию.',
+    'Правильно! Уши не обманывают.',
+    'Да! Прямо в цель.',
+    'Отлично! Ты реально знаешь это.'
   ],
   wrong_answer: [
-    'Not quite... Check the explanation!',
-    'It happens! Listen more carefully next time.',
-    'Close! Read why below.',
-    'Don\'t worry, that\'s how we learn.'
+    'Не совсем... Посмотри объяснение!',
+    'Бывает! В следующий раз слушай внимательнее.',
+    'Почти! Прочти, почему.',
+    'Не переживай, так мы учимся.'
   ],
   halfway: [
-    'Halfway there! You\'re doing great!',
-    'Half the test done, keep going!'
+    'Половина пройдена! Отлично идёшь!',
+    'Половина теста позади, продолжай!'
   ],
   almost_done: [
-    'Almost done! Final stretch.',
-    'Just a few more questions!'
+    'Почти всё! Финальный рывок.',
+    'Ещё пара вопросов!'
   ],
   idle_hint: [
-    'Press Play to start listening.',
-    'I\'m waiting...',
-    '*yawns*',
-    'Need a hint? Try A/B comparison.'
+    'Нажми Play, чтобы начать слушать.',
+    'Жду...',
+    '*зевает*',
+    'Нужна подсказка? Попробуй A/B сравнение.'
   ],
   results_pro: [
-    'Dynamics master! Compressors tremble before you!',
-    'Incredible! You really know your stuff.'
+    'Мастер динамики! Компрессоры трепещут!',
+    'Невероятно! Ты реально знаешь своё дело.'
   ],
   results_advanced: [
-    'Impressive! You\'ve got serious skills.',
-    'Almost pro level! Keep training.'
+    'Впечатляет! Серьёзные навыки.',
+    'Почти про-уровень! Продолжай тренироваться.'
   ],
   results_intermediate: [
-    'Solid foundation! Room to grow.',
-    'Good start! Practice makes perfect.'
+    'Крепкая база! Есть куда расти.',
+    'Хорошее начало! Практика сделает своё.'
   ],
   results_beginner: [
-    'Good beginning! Practice will make you pro.',
-    'Keep training your ears, you\'ll get there!'
+    'Хорошее начало! Практика приведёт к про-уровню.',
+    'Продолжай тренировать уши, ты на верном пути!'
   ],
   results_newbie: [
-    'Everyone starts somewhere! Try SoundGym for practice.',
-    'The journey begins! Keep learning about dynamics.'
+    'Все с чего-то начинают! Попробуй SoundGym для тренировки.',
+    'Путь начинается! Изучай динамическую обработку дальше.'
   ]
 };

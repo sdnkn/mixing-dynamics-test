@@ -10,8 +10,8 @@ var CompressorUI = (function() {
     var knobDefs = [
       { key: 'threshold', label: 'THR', min: -60, max: 0, unit: 'dB', step: 1 },
       { key: 'ratio', label: 'RAT', min: 1, max: 20, unit: ':1', step: 0.5 },
-      { key: 'attack', label: 'ATK', min: 0.001, max: 1, unit: 's', step: 0.001, display: 'ms', displayMul: 1000 },
-      { key: 'release', label: 'REL', min: 0.01, max: 1, unit: 's', step: 0.01, display: 'ms', displayMul: 1000 }
+      { key: 'attack', label: 'ATK', min: 0.001, max: 0.15, unit: 's', step: 0.001, display: 'ms', displayMul: 1000 },
+      { key: 'release', label: 'REL', min: 0.01, max: 1.1, unit: 's', step: 0.01, display: 'ms', displayMul: 1000 }
     ];
 
     knobDefs.forEach(function(def) {
@@ -96,6 +96,184 @@ var CompressorUI = (function() {
     document.addEventListener('mouseup', onUp);
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onUp);
+  }
+
+  // ─── Notched Knobs (snap-to-value) ───
+  function renderNotchedKnobs(container, params, notchConfig, onChange) {
+    var html = '<div class="knobs-row">';
+
+    var knobDefs = [
+      { key: 'threshold', label: 'THR', min: -60, max: 0, unit: 'dB', step: 1 }
+    ];
+
+    // Threshold knob (continuous)
+    knobDefs.forEach(function(def) {
+      var value = params[def.key] !== undefined ? params[def.key] : (def.min + def.max) / 2;
+      var angle = valueToAngle(value, def.min, def.max);
+      html += '<div class="knob-wrapper">' +
+        '<div class="knob" data-key="' + def.key + '" data-min="' + def.min +
+        '" data-max="' + def.max + '" data-step="' + def.step +
+        '" data-value="' + value + '" data-display-mul="1">' +
+        '<div class="knob-indicator" style="transform: translateX(-50%) rotate(' + angle + 'deg)"></div>' +
+        '</div>' +
+        '<span class="knob-label">' + def.label + '</span>' +
+        '<span class="knob-value" data-knob-value="' + def.key + '">' + Math.round(value) + def.unit + '</span>' +
+        '</div>';
+    });
+
+    // Notched attack knob
+    var atkNotches = notchConfig.attack; // [0.001, 0.005, ...]
+    var atkIdx = findClosestNotch(params.attack || 0.001, atkNotches);
+    var atkVal = atkNotches[atkIdx];
+    var atkAngle = valueToAngle(atkIdx, 0, atkNotches.length - 1);
+    html += '<div class="knob-wrapper">' +
+      '<div class="knob notched-knob" data-key="attack" data-notch-index="' + atkIdx +
+      '" data-notch-count="' + atkNotches.length + '" data-value="' + atkVal + '">' +
+      '<div class="knob-indicator" style="transform: translateX(-50%) rotate(' + atkAngle + 'deg)"></div>' +
+      '</div>' +
+      '<span class="knob-label">ATK</span>' +
+      '<span class="knob-value" data-knob-value="attack">' + Math.round(atkVal * 1000) + 'ms</span>' +
+      '</div>';
+
+    // Notched release knob
+    var relNotches = notchConfig.release; // [0.01, 0.04, ...]
+    var relIdx = findClosestNotch(params.release || 0.01, relNotches);
+    var relVal = relNotches[relIdx];
+    var relAngle = valueToAngle(relIdx, 0, relNotches.length - 1);
+    html += '<div class="knob-wrapper">' +
+      '<div class="knob notched-knob" data-key="release" data-notch-index="' + relIdx +
+      '" data-notch-count="' + relNotches.length + '" data-value="' + relVal + '">' +
+      '<div class="knob-indicator" style="transform: translateX(-50%) rotate(' + relAngle + 'deg)"></div>' +
+      '</div>' +
+      '<span class="knob-label">REL</span>' +
+      '<span class="knob-value" data-knob-value="release">' + Math.round(relVal * 1000) + 'ms</span>' +
+      '</div>';
+
+    html += '</div>';
+
+    // 1176-style ratio buttons
+    var ratioValues = notchConfig.ratio; // [4, 8, 12, 20]
+    var currentRatio = params.ratio || ratioValues[0];
+    html += '<div class="ratio-buttons-wrapper">' +
+      '<span class="ratio-buttons-label">RATIO</span>' +
+      '<div class="ratio-buttons">';
+    ratioValues.forEach(function(r) {
+      var active = r === currentRatio ? ' active' : '';
+      html += '<button class="ratio-btn' + active + '" data-ratio="' + r + '">' + r + ':1</button>';
+    });
+    html += '<button class="ratio-btn ratio-btn-all" data-ratio="all">ALL</button>';
+    html += '</div></div>';
+
+    container.innerHTML += html;
+
+    // Threshold knob drag (continuous)
+    var thrKnob = container.querySelector('.knob[data-key="threshold"]');
+    if (thrKnob && !thrKnob.classList.contains('notched-knob')) {
+      thrKnob.addEventListener('mousedown', function(e) { startKnobDrag(e, thrKnob, onChange); });
+      thrKnob.addEventListener('touchstart', function(e) { startKnobDrag(e, thrKnob, onChange); }, { passive: false });
+    }
+
+    // Notched knob drags
+    container.querySelectorAll('.notched-knob').forEach(function(knob) {
+      knob.addEventListener('mousedown', function(e) { startNotchedDrag(e, knob, notchConfig, onChange); });
+      knob.addEventListener('touchstart', function(e) { startNotchedDrag(e, knob, notchConfig, onChange); }, { passive: false });
+    });
+
+    // Ratio button clicks
+    container.querySelectorAll('.ratio-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var isAll = btn.dataset.ratio === 'all';
+        if (isAll) {
+          var allActive = btn.classList.contains('active');
+          container.querySelectorAll('.ratio-btn').forEach(function(b) {
+            if (allActive) {
+              b.classList.remove('active');
+            } else {
+              b.classList.add('active');
+            }
+          });
+          if (!allActive) {
+            if (onChange) onChange({ ratio: 20, knee: 0 });
+          } else {
+            var first = container.querySelector('.ratio-btn:not(.ratio-btn-all)');
+            if (first) {
+              first.classList.add('active');
+              if (onChange) onChange({ ratio: parseFloat(first.dataset.ratio) });
+            }
+          }
+        } else {
+          container.querySelectorAll('.ratio-btn').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          if (onChange) onChange({ ratio: parseFloat(btn.dataset.ratio) });
+        }
+      });
+    });
+  }
+
+  function findClosestNotch(value, notches) {
+    var idx = 0;
+    var minDist = Infinity;
+    for (var i = 0; i < notches.length; i++) {
+      var dist = Math.abs(notches[i] - value);
+      if (dist < minDist) { minDist = dist; idx = i; }
+    }
+    return idx;
+  }
+
+  function startNotchedDrag(e, knob, notchConfig, onChange) {
+    e.preventDefault();
+    var key = knob.dataset.key;
+    var notches = notchConfig[key];
+    var currentIdx = parseInt(knob.dataset.notchIndex);
+    var dragStartY = e.touches ? e.touches[0].clientY : e.clientY;
+    var dragStartIdx = currentIdx;
+
+    var onMove = function(ev) {
+      var currentY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+      var deltaY = dragStartY - currentY;
+      var sensitivity = 200 / (notches.length - 1);
+      var idxDelta = Math.round(deltaY / sensitivity);
+      var newIdx = Math.max(0, Math.min(notches.length - 1, dragStartIdx + idxDelta));
+
+      if (newIdx !== parseInt(knob.dataset.notchIndex)) {
+        knob.dataset.notchIndex = newIdx;
+        knob.dataset.value = notches[newIdx];
+
+        var angle = valueToAngle(newIdx, 0, notches.length - 1);
+        knob.querySelector('.knob-indicator').style.transform = 'translateX(-50%) rotate(' + angle + 'deg)';
+
+        var valueEl = knob.closest('.knobs-row').querySelector('[data-knob-value="' + key + '"]');
+        if (valueEl) valueEl.textContent = Math.round(notches[newIdx] * 1000) + 'ms';
+
+        if (onChange) {
+          var settings = {};
+          settings[key] = notches[newIdx];
+          onChange(settings);
+        }
+      }
+    };
+
+    var onUp = function() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  }
+
+  function getNotchedValues(container) {
+    var values = {};
+    container.querySelectorAll('.knob').forEach(function(knob) {
+      values[knob.dataset.key] = parseFloat(knob.dataset.value);
+    });
+    var activeRatio = container.querySelector('.ratio-btn.active');
+    if (activeRatio) values.ratio = parseFloat(activeRatio.dataset.ratio);
+    return values;
   }
 
   function getKnobValues(container) {
@@ -207,8 +385,11 @@ var CompressorUI = (function() {
     var h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = color || '#6c5ce7';
+    var drawColor = color || '#00e5ff';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = drawColor;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = drawColor;
     ctx.beginPath();
 
     var sliceWidth = w / analyserData.length;
@@ -221,6 +402,7 @@ var CompressorUI = (function() {
       x += sliceWidth;
     }
     ctx.stroke();
+    ctx.shadowBlur = 0;
   }
 
   // ─── GR Meter ───
@@ -242,7 +424,9 @@ var CompressorUI = (function() {
 
   return {
     renderKnobs: renderKnobs,
+    renderNotchedKnobs: renderNotchedKnobs,
     getKnobValues: getKnobValues,
+    getNotchedValues: getNotchedValues,
     renderBandSliders: renderBandSliders,
     getBandValues: getBandValues,
     renderSidechainSliders: renderSidechainSliders,

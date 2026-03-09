@@ -1,16 +1,40 @@
-// ─── Main App Controller ───
+// Main App Controller
 (function() {
   var currentIndex = 0;
   var questionStartTime = 0;
   var activeChains = {};
-  var abState = 'user'; // 'user' or 'target'
+  var abState = 'user';
   var vizRAF = null;
 
-  // ─── Screen Management ───
+  var DIFF_LABELS = { beginner: 'Начинающий', intermediate: 'Средний', advanced: 'Продвинутый' };
+  var TYPE_LABELS = {
+    theory: 'Теория', detection: 'A/B', matching: 'Настройка',
+    identify: 'Определи', multiband: 'Мультибенд', sidechain: 'Сайдчейн',
+    fix_mix: 'Диагностика'
+  };
+
+  function qText(q, field) {
+    return q[field + 'Ru'] || q[field];
+  }
+  function qOptions(q) {
+    return q.optionsRu || q.options;
+  }
+
+  function shuffleOptions(options, correctIndex) {
+    var indices = options.map(function(_, i) { return i; });
+    for (var i = indices.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var temp = indices[i];
+      indices[i] = indices[j];
+      indices[j] = temp;
+    }
+    var shuffled = indices.map(function(i) { return options[i]; });
+    var newCorrectIndex = indices.indexOf(correctIndex);
+    return { options: shuffled, correctIndex: newCorrectIndex };
+  }
+
   function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(function(s) {
-      s.classList.remove('active');
-    });
+    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
     var screen = document.getElementById('screen-' + id);
     if (screen) screen.classList.add('active');
   }
@@ -18,18 +42,28 @@
   function updateProgress() {
     var counter = document.getElementById('question-counter');
     var fill = document.getElementById('progress-fill');
-    var badge = document.getElementById('question-difficulty');
+    var diffBadge = document.getElementById('question-difficulty');
+    var typeBadge = document.getElementById('question-type');
     var q = QUESTIONS[currentIndex];
 
     if (counter) counter.textContent = (currentIndex + 1) + ' / ' + QUESTIONS.length;
     if (fill) fill.style.width = ((currentIndex + 1) / QUESTIONS.length * 100) + '%';
-    if (badge && q) {
-      badge.textContent = q.difficulty;
-      badge.className = 'difficulty-badge ' + q.difficulty;
+    if (diffBadge && q) {
+      diffBadge.textContent = DIFF_LABELS[q.difficulty] || q.difficulty;
+      diffBadge.className = 'diff-badge ' + q.difficulty;
+    }
+    if (typeBadge && q) {
+      typeBadge.textContent = TYPE_LABELS[q.type] || q.type;
     }
   }
 
-  // ─── Start Test ───
+  function setLoadingStatus(text, percent) {
+    var loadText = document.querySelector('.loading-text');
+    var progress = document.getElementById('loading-progress');
+    if (loadText) loadText.textContent = text;
+    if (progress) progress.style.width = percent + '%';
+  }
+
   function startTest(fromIndex) {
     if (fromIndex === undefined || fromIndex < 0) {
       Scoring.reset();
@@ -39,28 +73,36 @@
     }
 
     showScreen('loading');
-    AudioEngine.preloadAll();
 
-    // Brief loading simulation
-    var progress = document.getElementById('loading-progress');
-    var step = 0;
-    var loadInterval = setInterval(function() {
-      step += 20;
-      if (progress) progress.style.width = step + '%';
-      if (step >= 100) {
-        clearInterval(loadInterval);
-        Mascot.init();
-        Mascot.show();
-        Mascot.trigger('test_start', { duration: 5000 });
-        setTimeout(function() {
-          showScreen('question');
-          renderQuestion();
-        }, 500);
-      }
-    }, 100);
+    if (typeof Tone === 'undefined') {
+      setLoadingStatus('Ошибка: Tone.js не загружен (проверь интернет)', 0);
+      return;
+    }
+
+    setLoadingStatus('Инициализация аудио...', 10);
+
+    AudioEngine.init().then(function() {
+      setLoadingStatus('Загрузка аудио...', 20);
+      return AudioEngine.preloadAll(function(name, pct) {
+        setLoadingStatus('Загрузка: ' + name + '...', 20 + pct * 0.7);
+      });
+    }).then(function() {
+      setLoadingStatus('Готово!', 100);
+      Mascot.init();
+      Mascot.show();
+      Mascot.trigger('test_start', { duration: 5000 });
+      setTimeout(function() {
+        showScreen('question');
+        renderQuestion();
+      }, 500);
+    }).catch(function(err) {
+      console.error('Audio init error:', err);
+      setLoadingStatus('Ошибка: ' + (err.message || err), 0);
+      var loadText = document.querySelector('.loading-text');
+      if (loadText) loadText.style.color = '#ff6b9d';
+    });
   }
 
-  // ─── Render Question by Type ───
   function renderQuestion() {
     stopAllAudio();
     var q = QUESTIONS[currentIndex];
@@ -72,6 +114,10 @@
     var container = document.getElementById('question-container');
     container.innerHTML = '';
 
+    var hasAudio = ['detection', 'matching', 'identify', 'multiband', 'sidechain'].indexOf(q.type) !== -1;
+    var stopBtn = document.getElementById('global-stop-btn');
+    if (stopBtn) stopBtn.hidden = !hasAudio;
+
     switch (q.type) {
       case 'theory': renderTheory(container, q); break;
       case 'detection': renderDetection(container, q); break;
@@ -79,16 +125,17 @@
       case 'identify': renderIdentify(container, q); break;
       case 'multiband': renderMultiband(container, q); break;
       case 'sidechain': renderSidechain(container, q); break;
+      case 'fix_mix': renderFixMix(container, q); break;
     }
 
-    // Mascot trigger
     var mascotEvent = {
       theory: 'question_theory',
       detection: 'question_audio',
       matching: 'question_interactive',
       identify: 'question_audio',
       multiband: 'question_multiband',
-      sidechain: 'question_sidechain'
+      sidechain: 'question_sidechain',
+      fix_mix: 'question_diagnostic'
     }[q.type] || 'question_theory';
 
     setTimeout(function() {
@@ -121,17 +168,17 @@
     if (vizRAF) { cancelAnimationFrame(vizRAF); vizRAF = null; }
   }
 
-  // ─── Type 1: Theory ───
+  // ─── Theory ───
   function renderTheory(container, q) {
-    var opts = q.optionsRu || q.options;
-    var html = '<p class="question-text">' + (q.questionRu || q.question) + '</p>';
+    var shuffled = shuffleOptions(qOptions(q), q.correctIndex);
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
     html += '<div class="options-list">';
-    opts.forEach(function(opt, i) {
+    shuffled.options.forEach(function(opt, i) {
       html += '<div class="option-item" data-index="' + i + '">' + opt + '</div>';
     });
     html += '</div>';
     html += '<div class="explanation" hidden></div>';
-    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Next</button></div>';
+    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button></div>';
 
     container.innerHTML = html;
 
@@ -142,12 +189,12 @@
         answered = true;
 
         var idx = parseInt(item.dataset.index);
-        var correct = idx === q.correctIndex;
+        var correct = idx === shuffled.correctIndex;
         var timeSpent = (Date.now() - questionStartTime) / 1000;
 
         item.classList.add(correct ? 'correct' : 'wrong');
         if (!correct) {
-          container.querySelectorAll('.option-item')[q.correctIndex].classList.add('correct');
+          container.querySelectorAll('.option-item')[shuffled.correctIndex].classList.add('correct');
         }
         container.querySelectorAll('.option-item').forEach(function(o) { o.classList.add('disabled'); });
 
@@ -155,11 +202,7 @@
         Mascot.trigger(correct ? 'correct_answer' : 'wrong_answer');
 
         var explEl = container.querySelector('.explanation');
-        if (explEl && q.explanation) {
-          explEl.textContent = q.explanation;
-          explEl.hidden = false;
-        }
-
+        if (explEl && q.explanation) { explEl.textContent = q.explanation; explEl.hidden = false; }
         document.getElementById('next-btn').hidden = false;
       });
     });
@@ -167,9 +210,9 @@
     document.getElementById('next-btn').addEventListener('click', nextQuestion);
   }
 
-  // ─── Type 2: Detection ───
+  // ─── Detection (A/B) ───
   function renderDetection(container, q) {
-    var html = '<p class="question-text">' + (q.questionRu || q.question) + '</p>';
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
     html += '<div class="audio-controls">' +
       '<button class="btn-play" id="play-a">&#9654; A</button>' +
       '<button class="btn-play" id="play-b">&#9654; B</button>' +
@@ -183,18 +226,14 @@
       '<div class="option-item" data-answer="B">B</div>' +
       '</div>';
     html += '<div class="explanation" hidden></div>';
-    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Next</button></div>';
+    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button></div>';
 
     container.innerHTML = html;
 
     var chainA = AudioEngine.createCompressorChain(q.settingsA);
     var chainB = AudioEngine.createCompressorChain(q.settingsB);
-
-    // Normalize loudness with makeup gain
-    var gainA = estimateMakeupGain(q.settingsA);
-    var gainB = estimateMakeupGain(q.settingsB);
-    chainA.makeup.gain.value = gainA;
-    chainB.makeup.gain.value = gainB;
+    chainA.makeup.gain.value = estimateMakeupGain(q.settingsA);
+    chainB.makeup.gain.value = estimateMakeupGain(q.settingsB);
 
     var canvasA = document.getElementById('wave-a');
     var canvasB = document.getElementById('wave-b');
@@ -203,10 +242,12 @@
     function startViz() {
       if (vizRAF) cancelAnimationFrame(vizRAF);
       function loop() {
+        applyRealtimeGainComp(chainA);
+        applyRealtimeGainComp(chainB);
         if (playingChain === 'A') {
-          CompressorUI.drawWaveform(canvasA, AudioEngine.getAnalyserData(chainA.analyser), '#6c5ce7');
+          CompressorUI.drawWaveform(canvasA, AudioEngine.getAnalyserData(chainA.analyser), '#00e5ff');
         } else if (playingChain === 'B') {
-          CompressorUI.drawWaveform(canvasB, AudioEngine.getAnalyserData(chainB.analyser), '#a78bfa');
+          CompressorUI.drawWaveform(canvasB, AudioEngine.getAnalyserData(chainB.analyser), '#00e5ff');
         }
         vizRAF = requestAnimationFrame(loop);
       }
@@ -252,7 +293,6 @@
 
         var explEl = container.querySelector('.explanation');
         if (explEl && q.explanation) { explEl.textContent = q.explanation; explEl.hidden = false; }
-
         document.getElementById('next-btn').hidden = false;
       });
     });
@@ -261,24 +301,30 @@
   }
 
   function estimateMakeupGain(settings) {
-    // Simple makeup gain estimation to normalize loudness
     var reduction = Math.max(0, -settings.threshold) * (1 - 1 / settings.ratio);
     return Math.pow(10, reduction * 0.3 / 20);
   }
 
-  // ─── Type 3: Matching ───
+  function applyRealtimeGainComp(chain) {
+    if (!chain || !chain.compressor) return;
+    var gr = Math.abs(chain.compressor.reduction);
+    var comp = Math.pow(10, gr * 0.7 / 20);
+    chain.makeup.gain.value = Math.min(comp, 4);
+  }
+
+  // ─── Matching ───
   function renderMatching(container, q) {
-    var html = '<p class="question-text">' + (q.questionRu || q.question) + '</p>';
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
     html += '<div class="audio-controls">' +
       '<button class="btn-play" id="play-btn">&#9654; Play</button>' +
-      '<button class="btn-ab" id="ab-btn">A/B: Yours</button>' +
+      '<button class="btn-ab" id="ab-btn">A/B: Твой</button>' +
       '</div>';
     html += '<div class="waveform-container"><canvas class="waveform-canvas" id="wave-main" width="600" height="80"></canvas></div>';
     html += '<div class="gr-meter"><span class="gr-meter-label">GR</span><div class="gr-meter-bar"><div class="gr-meter-fill" id="gr-fill"></div></div><span class="gr-meter-value" id="gr-value">0 dB</span></div>';
     html += '<div id="knobs-area"></div>';
     html += '<div class="question-actions">' +
-      '<button class="btn btn-primary btn-small" id="submit-btn">Check</button>' +
-      '<button class="btn btn-primary btn-small" id="next-btn" hidden>Next</button>' +
+      '<button class="btn btn-primary btn-small" id="submit-btn">Проверить</button>' +
+      '<button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button>' +
       '</div>';
     html += '<div class="explanation" hidden></div>';
 
@@ -286,19 +332,23 @@
 
     var userChain = AudioEngine.createCompressorChain(q.startSettings);
     var targetChain = AudioEngine.createCompressorChain(q.targetSettings);
-    var targetMakeup = estimateMakeupGain(q.targetSettings);
-    targetChain.makeup.gain.value = targetMakeup;
+    targetChain.makeup.gain.value = estimateMakeupGain(q.targetSettings);
 
     activeChains.user = userChain;
     activeChains.target = targetChain;
 
-    CompressorUI.renderKnobs(document.getElementById('knobs-area'), q.startSettings, function(settings) {
+    var knobsArea = document.getElementById('knobs-area');
+    var knobsOnChange = function(settings) {
       AudioEngine.updateCompressor(userChain, settings);
-      // Update makeup gain
-      var knobVals = CompressorUI.getKnobValues(document.getElementById('knobs-area'));
-      var mg = estimateMakeupGain(knobVals);
-      userChain.makeup.gain.value = mg;
-    });
+      var knobVals = q.notchMode ? CompressorUI.getNotchedValues(knobsArea) : CompressorUI.getKnobValues(knobsArea);
+      userChain.makeup.gain.value = estimateMakeupGain(knobVals);
+    };
+
+    if (q.notchMode && q.notchConfig) {
+      CompressorUI.renderNotchedKnobs(knobsArea, q.startSettings, q.notchConfig, knobsOnChange);
+    } else {
+      CompressorUI.renderKnobs(knobsArea, q.startSettings, knobsOnChange);
+    }
 
     var canvas = document.getElementById('wave-main');
     var currentChain = userChain;
@@ -307,15 +357,13 @@
       if (vizRAF) cancelAnimationFrame(vizRAF);
       function loop() {
         var data = AudioEngine.getAnalyserData(currentChain.analyser);
-        CompressorUI.drawWaveform(canvas, data, abState === 'user' ? '#6c5ce7' : '#f39c12');
-
+        CompressorUI.drawWaveform(canvas, data, abState === 'user' ? '#00e5ff' : '#ff6b9d');
         var fill = document.getElementById('gr-fill');
         var grValue = document.getElementById('gr-value');
         var reduction = AudioEngine.getReduction(currentChain);
         var percent = Math.min(100, Math.abs(reduction) / 20 * 100);
         if (fill) fill.style.width = percent + '%';
         if (grValue) grValue.textContent = Math.round(reduction) + ' dB';
-
         vizRAF = requestAnimationFrame(loop);
       }
       loop();
@@ -329,7 +377,7 @@
       } else {
         AudioEngine.play(q.audioSource, currentChain);
         this.classList.add('playing');
-        this.innerHTML = '&#9724; Stop';
+        this.innerHTML = '&#9724; Стоп';
         startViz();
       }
     });
@@ -337,19 +385,17 @@
     document.getElementById('ab-btn').addEventListener('click', function() {
       var wasPlaying = AudioEngine.isPlaying();
       if (wasPlaying) AudioEngine.stop();
-
       if (abState === 'user') {
         abState = 'target';
         currentChain = targetChain;
-        this.textContent = 'A/B: Target';
+        this.textContent = 'A/B: Цель';
         this.classList.add('active-b');
       } else {
         abState = 'user';
         currentChain = userChain;
-        this.textContent = 'A/B: Yours';
+        this.textContent = 'A/B: Твой';
         this.classList.remove('active-b');
       }
-
       if (wasPlaying) {
         AudioEngine.play(q.audioSource, currentChain);
         startViz();
@@ -357,7 +403,7 @@
     });
 
     document.getElementById('submit-btn').addEventListener('click', function() {
-      var vals = CompressorUI.getKnobValues(document.getElementById('knobs-area'));
+      var vals = q.notchMode ? CompressorUI.getNotchedValues(knobsArea) : CompressorUI.getKnobValues(knobsArea);
       var accuracy = calculateAccuracy(vals, q.targetSettings, q.tolerance);
 
       Scoring.recordAccuracyAnswer(q.id, accuracy, q.points, q.category, q.difficulty);
@@ -367,8 +413,8 @@
 
       var explEl = container.querySelector('.explanation');
       if (explEl) {
-        var label = accuracy <= 0.2 ? 'Perfect!' : accuracy <= 0.5 ? 'Good!' : accuracy <= 0.8 ? 'Close' : 'Keep practicing';
-        explEl.textContent = label + ' Target: THR=' + q.targetSettings.threshold + 'dB, RAT=' + q.targetSettings.ratio + ':1, ATK=' + Math.round(q.targetSettings.attack * 1000) + 'ms, REL=' + Math.round(q.targetSettings.release * 1000) + 'ms';
+        var label = accuracy <= 0.2 ? 'Идеально!' : accuracy <= 0.5 ? 'Хорошо!' : accuracy <= 0.8 ? 'Близко' : 'Продолжай практиковаться';
+        explEl.textContent = label + ' Цель: THR=' + q.targetSettings.threshold + 'дБ, RAT=' + q.targetSettings.ratio + ':1, ATK=' + Math.round(q.targetSettings.attack * 1000) + 'мс, REL=' + Math.round(q.targetSettings.release * 1000) + 'мс';
         explEl.hidden = false;
       }
 
@@ -387,31 +433,31 @@
     params.forEach(function(p) {
       if (target[p] !== undefined && userVals[p] !== undefined && tolerance[p]) {
         var dev = Math.abs(userVals[p] - target[p]) / tolerance[p];
-        totalDeviation += Math.min(dev, 2); // cap at 2x tolerance
+        totalDeviation += Math.min(dev, 2);
         count++;
       }
     });
 
-    return count > 0 ? totalDeviation / count / 2 : 1; // normalize to 0-1
+    return count > 0 ? totalDeviation / count / 2 : 1;
   }
 
-  // ─── Type 4: Identify ───
+  // ─── Identify ───
   function renderIdentify(container, q) {
-    var html = '<p class="question-text">' + (q.questionRu || q.question) + '</p>';
+    var shuffled = shuffleOptions(qOptions(q), q.correctIndex);
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
     html += '<div class="audio-controls">' +
-      '<button class="btn-play" id="play-processed">&#9654; Processed</button>' +
-      '<button class="btn-play" id="play-original">&#9654; Original</button>' +
+      '<button class="btn-play" id="play-processed">&#9654; Обработанный</button>' +
+      '<button class="btn-play" id="play-original">&#9654; Оригинал</button>' +
       '</div>';
     html += '<div class="waveform-container"><canvas class="waveform-canvas" id="wave-id" width="600" height="80"></canvas></div>';
 
-    var opts = q.optionsRu || q.options;
     html += '<div class="options-list">';
-    opts.forEach(function(opt, i) {
+    shuffled.options.forEach(function(opt, i) {
       html += '<div class="option-item" data-index="' + i + '">' + opt + '</div>';
     });
     html += '</div>';
     html += '<div class="explanation" hidden></div>';
-    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Next</button></div>';
+    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button></div>';
 
     container.innerHTML = html;
 
@@ -431,20 +477,18 @@
       currentAnalyser = analyser;
       if (vizRAF) cancelAnimationFrame(vizRAF);
       function loop() {
-        CompressorUI.drawWaveform(canvas, AudioEngine.getAnalyserData(currentAnalyser), '#6c5ce7');
+        CompressorUI.drawWaveform(canvas, AudioEngine.getAnalyserData(currentAnalyser));
         vizRAF = requestAnimationFrame(loop);
       }
       loop();
     }
 
-    // For sidechain_demo type
     var audioSource = q.audioSource;
     if (audioSource === 'sidechain_demo') audioSource = 'mix';
 
     document.getElementById('play-processed').addEventListener('click', function() {
       AudioEngine.stop();
       if (q.audioSource === 'sidechain_demo' && q.hiddenSidechain) {
-        // Play with sidechain effect
         var scChain = AudioEngine.createSidechainChain({ depth: 12, attack: 0.01, release: 0.15 });
         AudioEngine.playSidechain();
         startViz(scChain.analyser);
@@ -459,7 +503,6 @@
     document.getElementById('play-original').addEventListener('click', function() {
       AudioEngine.stop();
       if (q.audioSource === 'sidechain_demo') {
-        // Play without sidechain - just the mix
         AudioEngine.play('mix', bypassChain);
       } else {
         AudioEngine.play(audioSource, bypassChain);
@@ -476,12 +519,12 @@
         answered = true;
 
         var idx = parseInt(item.dataset.index);
-        var correct = idx === q.correctIndex;
+        var correct = idx === shuffled.correctIndex;
         var timeSpent = (Date.now() - questionStartTime) / 1000;
 
         item.classList.add(correct ? 'correct' : 'wrong');
         if (!correct) {
-          container.querySelectorAll('.option-item')[q.correctIndex].classList.add('correct');
+          container.querySelectorAll('.option-item')[shuffled.correctIndex].classList.add('correct');
         }
         container.querySelectorAll('.option-item').forEach(function(o) { o.classList.add('disabled'); });
 
@@ -490,7 +533,6 @@
 
         var explEl = container.querySelector('.explanation');
         if (explEl && q.explanation) { explEl.textContent = q.explanation; explEl.hidden = false; }
-
         document.getElementById('next-btn').hidden = false;
       });
     });
@@ -498,18 +540,18 @@
     document.getElementById('next-btn').addEventListener('click', nextQuestion);
   }
 
-  // ─── Type 5: Multiband ───
+  // ─── Multiband ───
   function renderMultiband(container, q) {
-    var html = '<p class="question-text">' + (q.questionRu || q.question) + '</p>';
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
     html += '<div class="audio-controls">' +
       '<button class="btn-play" id="play-btn">&#9654; Play</button>' +
-      '<button class="btn-ab" id="ab-btn">A/B: Yours</button>' +
+      '<button class="btn-ab" id="ab-btn">A/B: Твой</button>' +
       '</div>';
     html += '<div class="waveform-container"><canvas class="waveform-canvas" id="wave-mb" width="600" height="80"></canvas></div>';
     html += '<div id="bands-area"></div>';
     html += '<div class="question-actions">' +
-      '<button class="btn btn-primary btn-small" id="submit-btn">Check</button>' +
-      '<button class="btn btn-primary btn-small" id="next-btn" hidden>Next</button>' +
+      '<button class="btn btn-primary btn-small" id="submit-btn">Проверить</button>' +
+      '<button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button>' +
       '</div>';
     html += '<div class="explanation" hidden></div>';
 
@@ -520,9 +562,9 @@
 
     var bandsArea = document.getElementById('bands-area');
     var bandLabels = {
-      low: 'LOW (20-200 Hz)',
-      mid: 'MID (200 Hz - 2 kHz)',
-      high: 'HIGH (2 kHz - 20 kHz)'
+      low: 'LOW (20–200 Гц)',
+      mid: 'MID (200 Гц – 2 кГц)',
+      high: 'HIGH (2 кГц – 20 кГц)'
     };
 
     ['low', 'mid', 'high'].forEach(function(name) {
@@ -540,14 +582,11 @@
     function startViz() {
       if (vizRAF) cancelAnimationFrame(vizRAF);
       function loop() {
-        CompressorUI.drawWaveform(canvas, AudioEngine.getAnalyserData(currentMB.analyser), abState === 'user' ? '#6c5ce7' : '#f39c12');
-
-        // Update GR meters
+        CompressorUI.drawWaveform(canvas, AudioEngine.getAnalyserData(currentMB.analyser), abState === 'user' ? '#00e5ff' : '#ff6b9d');
         var reductions = AudioEngine.getMultibandReduction(currentMB);
         ['low', 'mid', 'high'].forEach(function(name) {
           CompressorUI.updateGRByName(bandsArea, name, reductions[name]);
         });
-
         vizRAF = requestAnimationFrame(loop);
       }
       loop();
@@ -561,7 +600,7 @@
       } else {
         AudioEngine.play(q.audioSource, currentMB);
         this.classList.add('playing');
-        this.innerHTML = '&#9724; Stop';
+        this.innerHTML = '&#9724; Стоп';
         startViz();
       }
     });
@@ -569,19 +608,21 @@
     document.getElementById('ab-btn').addEventListener('click', function() {
       var wasPlaying = AudioEngine.isPlaying();
       if (wasPlaying) AudioEngine.stop();
-
       if (abState === 'user') {
         abState = 'target';
         currentMB = targetMB;
-        this.textContent = 'A/B: Target';
+        this.textContent = 'A/B: Цель';
         this.classList.add('active-b');
+        bandsArea.classList.add('disabled-controls');
+        bandsArea.querySelectorAll('input').forEach(function(inp) { inp.disabled = true; });
       } else {
         abState = 'user';
         currentMB = userMB;
-        this.textContent = 'A/B: Yours';
+        this.textContent = 'A/B: Твой';
         this.classList.remove('active-b');
+        bandsArea.classList.remove('disabled-controls');
+        bandsArea.querySelectorAll('input').forEach(function(inp) { inp.disabled = false; });
       }
-
       if (wasPlaying) {
         AudioEngine.play(q.audioSource, currentMB);
         startViz();
@@ -613,11 +654,11 @@
 
       var explEl = container.querySelector('.explanation');
       if (explEl) {
-        var label = accuracy <= 0.2 ? 'Perfect!' : accuracy <= 0.5 ? 'Good!' : 'Keep practicing';
+        var label = accuracy <= 0.2 ? 'Идеально!' : accuracy <= 0.5 ? 'Хорошо!' : 'Продолжай практиковаться';
         var targetStr = ['low', 'mid', 'high'].map(function(n) {
-          return n.toUpperCase() + ': THR=' + q.targetBands[n].threshold + 'dB, RAT=' + q.targetBands[n].ratio + ':1';
+          return n.toUpperCase() + ': THR=' + q.targetBands[n].threshold + 'дБ, RAT=' + q.targetBands[n].ratio + ':1';
         }).join(' | ');
-        explEl.textContent = label + ' Target: ' + targetStr;
+        explEl.textContent = label + ' Цель: ' + targetStr;
         explEl.hidden = false;
       }
 
@@ -628,12 +669,12 @@
     document.getElementById('next-btn').addEventListener('click', nextQuestion);
   }
 
-  // ─── Type 6: Sidechain ───
+  // ─── Sidechain ───
   function renderSidechain(container, q) {
-    var html = '<p class="question-text">' + (q.questionRu || q.question) + '</p>';
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
     html += '<div class="audio-controls">' +
       '<button class="btn-play" id="play-btn">&#9654; Play</button>' +
-      '<button class="btn-ab" id="ab-btn">A/B: Yours</button>' +
+      '<button class="btn-ab" id="ab-btn">A/B: Твой</button>' +
       '</div>';
     html += '<div class="sidechain-viz">' +
       '<div class="sidechain-track"><span class="sidechain-track-label">KICK</span><canvas class="sidechain-canvas" id="sc-kick" width="500" height="40"></canvas></div>' +
@@ -641,8 +682,8 @@
       '</div>';
     html += '<div id="sc-sliders" class="band-section"></div>';
     html += '<div class="question-actions">' +
-      '<button class="btn btn-primary btn-small" id="submit-btn">Check</button>' +
-      '<button class="btn btn-primary btn-small" id="next-btn" hidden>Next</button>' +
+      '<button class="btn btn-primary btn-small" id="submit-btn">Проверить</button>' +
+      '<button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button>' +
       '</div>';
     html += '<div class="explanation" hidden></div>';
 
@@ -651,7 +692,7 @@
     var userSC = AudioEngine.createSidechainChain(q.startSettings);
     var slidersArea = document.getElementById('sc-sliders');
 
-    CompressorUI.renderSidechainSliders(slidersArea, q.startSettings, function(settings) {
+    CompressorUI.renderSidechainSliders(slidersArea, q.startSettings, function() {
       var all = CompressorUI.getSidechainValues(slidersArea);
       AudioEngine.updateSidechainSettings(all);
     });
@@ -663,10 +704,10 @@
       if (vizRAF) cancelAnimationFrame(vizRAF);
       function loop() {
         if (userSC.kickAnalyser) {
-          CompressorUI.drawWaveform(kickCanvas, AudioEngine.getAnalyserData(userSC.kickAnalyser), '#e74c3c');
+          CompressorUI.drawWaveform(kickCanvas, AudioEngine.getAnalyserData(userSC.kickAnalyser), '#ff6b9d');
         }
         if (userSC.analyser) {
-          CompressorUI.drawWaveform(bassCanvas, AudioEngine.getAnalyserData(userSC.analyser), '#6c5ce7');
+          CompressorUI.drawWaveform(bassCanvas, AudioEngine.getAnalyserData(userSC.analyser), '#00e5ff');
         }
         vizRAF = requestAnimationFrame(loop);
       }
@@ -681,23 +722,22 @@
       } else {
         AudioEngine.playSidechain();
         this.classList.add('playing');
-        this.innerHTML = '&#9724; Stop';
+        this.innerHTML = '&#9724; Стоп';
         startViz();
       }
     });
 
-    // A/B: toggle sidechain depth
     var scEnabled = true;
     document.getElementById('ab-btn').addEventListener('click', function() {
       if (scEnabled) {
         AudioEngine.updateSidechainSettings({ depth: 0, attack: 0.01, release: 0.15 });
-        this.textContent = 'A/B: No SC';
+        this.textContent = 'A/B: Без SC';
         this.classList.add('active-b');
         scEnabled = false;
       } else {
         var vals = CompressorUI.getSidechainValues(slidersArea);
         AudioEngine.updateSidechainSettings(vals);
-        this.textContent = 'A/B: Yours';
+        this.textContent = 'A/B: Твой';
         this.classList.remove('active-b');
         scEnabled = true;
       }
@@ -723,13 +763,60 @@
 
       var explEl = container.querySelector('.explanation');
       if (explEl) {
-        var label = accuracy <= 0.2 ? 'Perfect!' : accuracy <= 0.5 ? 'Good!' : 'Keep practicing';
-        explEl.textContent = label + ' Target: Depth=' + q.targetSettings.depth + 'dB, ATK=' + Math.round(q.targetSettings.attack * 1000) + 'ms, REL=' + Math.round(q.targetSettings.release * 1000) + 'ms';
+        var label = accuracy <= 0.2 ? 'Идеально!' : accuracy <= 0.5 ? 'Хорошо!' : 'Продолжай практиковаться';
+        explEl.textContent = label + ' Цель: Depth=' + q.targetSettings.depth + 'дБ, ATK=' + Math.round(q.targetSettings.attack * 1000) + 'мс, REL=' + Math.round(q.targetSettings.release * 1000) + 'мс';
         explEl.hidden = false;
       }
 
       this.hidden = true;
       document.getElementById('next-btn').hidden = false;
+    });
+
+    document.getElementById('next-btn').addEventListener('click', nextQuestion);
+  }
+
+  // ─── Fix Mix (diagnostic scenario) ───
+  function renderFixMix(container, q) {
+    var shuffled = shuffleOptions(qOptions(q), q.correctIndex);
+    var html = '<p class="question-text">' + qText(q, 'question') + '</p>';
+
+    if (q.scenario) {
+      html += '<div class="scenario-box"><p>' + q.scenario + '</p></div>';
+    }
+
+    html += '<div class="options-list">';
+    shuffled.options.forEach(function(opt, i) {
+      html += '<div class="option-item" data-index="' + i + '">' + opt + '</div>';
+    });
+    html += '</div>';
+    html += '<div class="explanation" hidden></div>';
+    html += '<div class="question-actions"><button class="btn btn-primary btn-small" id="next-btn" hidden>Далее</button></div>';
+
+    container.innerHTML = html;
+
+    var answered = false;
+    container.querySelectorAll('.option-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        if (answered) return;
+        answered = true;
+
+        var idx = parseInt(item.dataset.index);
+        var correct = idx === shuffled.correctIndex;
+        var timeSpent = (Date.now() - questionStartTime) / 1000;
+
+        item.classList.add(correct ? 'correct' : 'wrong');
+        if (!correct) {
+          container.querySelectorAll('.option-item')[shuffled.correctIndex].classList.add('correct');
+        }
+        container.querySelectorAll('.option-item').forEach(function(o) { o.classList.add('disabled'); });
+
+        Scoring.recordAnswer(q.id, correct, q.points, q.category, q.difficulty, timeSpent);
+        Mascot.trigger(correct ? 'correct_answer' : 'wrong_answer');
+
+        var explEl = container.querySelector('.explanation');
+        if (explEl && q.explanation) { explEl.textContent = q.explanation; explEl.hidden = false; }
+        document.getElementById('next-btn').hidden = false;
+      });
     });
 
     document.getElementById('next-btn').addEventListener('click', nextQuestion);
@@ -747,12 +834,15 @@
     var totalTime = Scoring.getTotalTime();
     var correctCount = Scoring.getCorrectCount();
 
-    // Mascot result trigger
     Mascot.trigger('results_' + level.id);
 
     var container = document.getElementById('results-container');
-    var html = '<div class="results-level" style="color:' + level.color + '">' + level.labelRu + '</div>';
-    html += '<div class="results-score">' + Scoring.getTotalScore() + ' / ' + Scoring.getMaxScore() + ' (' + percent + '%) &middot; ' + correctCount + '/' + QUESTIONS.length + ' correct &middot; ' + formatTime(totalTime) + '</div>';
+    var html = '<div class="results-header">';
+    html += '<p class="results-tag">Результат</p>';
+    html += '<div class="results-level" style="color:' + level.color + '">' + level.label + '</div>';
+    html += '<div class="results-score">' + percent + '%</div>';
+    html += '<div class="results-detail">' + Scoring.getTotalScore() + ' / ' + Scoring.getMaxScore() + ' очков &middot; ' + correctCount + '/' + QUESTIONS.length + ' верно &middot; ' + formatTime(totalTime) + '</div>';
+    html += '</div>';
 
     html += '<div class="results-breakdown">';
     Object.keys(SCORING_RULES.categories).forEach(function(key) {
@@ -760,15 +850,17 @@
       var b = breakdown[key];
       var catPercent = b.max > 0 ? Math.round(b.score / b.max * 100) : 0;
       html += '<div class="breakdown-item">' +
-        '<span class="breakdown-label">' + cat.icon + ' ' + cat.labelRu + '</span>' +
-        '<span class="breakdown-value">' + catPercent + '% (' + b.correct + '/' + b.total + ')</span>' +
+        '<span class="breakdown-icon">' + cat.icon + '</span>' +
+        '<span class="breakdown-label">' + cat.label + '</span>' +
+        '<div class="breakdown-bar"><div class="breakdown-bar-fill" style="width:' + catPercent + '%"></div></div>' +
+        '<span class="breakdown-value">' + catPercent + '%</span>' +
         '</div>';
     });
     html += '</div>';
 
     html += '<div class="results-actions">' +
-      '<button class="btn btn-primary" id="share-btn">Share Result</button>' +
-      '<button class="btn btn-secondary" id="retry-btn">Try Again</button>' +
+      '<button class="btn btn-primary" id="share-btn">Поделиться</button>' +
+      '<button class="btn btn-ghost" id="retry-btn">Пройти заново</button>' +
       '</div>';
 
     container.innerHTML = html;
@@ -780,8 +872,8 @@
       } else if (navigator.clipboard) {
         navigator.clipboard.writeText(text).then(function() {
           var btn = document.getElementById('share-btn');
-          btn.textContent = 'Copied!';
-          setTimeout(function() { btn.textContent = 'Share Result'; }, 2000);
+          btn.textContent = 'Скопировано!';
+          setTimeout(function() { btn.textContent = 'Поделиться'; }, 2000);
         });
       }
     });
@@ -799,17 +891,24 @@
 
   // ─── Init ───
   document.addEventListener('DOMContentLoaded', function() {
-    // Check for saved progress
     var savedIndex = Scoring.loadProgress();
-    if (savedIndex > 0) {
-      document.getElementById('continue-btn').hidden = false;
-      document.getElementById('continue-btn').addEventListener('click', function() {
-        startTest(savedIndex);
+    var startBtn = document.getElementById('start-btn');
+    if (startBtn) {
+      startBtn.addEventListener('click', function() {
+        startBtn.hidden = true;
+        startTest(savedIndex > 0 ? savedIndex : undefined);
       });
     }
 
-    document.getElementById('start-btn').addEventListener('click', function() {
-      startTest();
-    });
+    var stopBtn = document.getElementById('global-stop-btn');
+    if (stopBtn) {
+      stopBtn.addEventListener('click', function() {
+        stopAllAudio();
+        document.querySelectorAll('.btn-play.playing').forEach(function(b) {
+          b.classList.remove('playing');
+          b.innerHTML = '&#9654; Play';
+        });
+      });
+    }
   });
 })();

@@ -4,43 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mixing Dynamics Test</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
   <!-- Loading Screen -->
-  <div id="screen-loading" class="screen">
+  <div id="screen-loading" class="screen active">
     <div class="loading-content">
-      <div class="loading-spinner"></div>
-      <p class="loading-text">Loading audio...</p>
+      <div class="loading-ring"></div>
+      <h2 class="loading-title">Mixing Dynamics</h2>
+      <p class="loading-text">Нажми для начала</p>
       <div class="loading-bar">
         <div class="loading-bar-fill" id="loading-progress"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- Welcome Screen -->
-  <div id="screen-welcome" class="screen active">
-    <div class="welcome-content">
-      <h1 class="welcome-title">Mixing Dynamics Test</h1>
-      <p class="welcome-subtitle">Check your dynamics processing skills</p>
-      <div class="welcome-info">
-        <div class="info-item">
-          <span class="info-number">20</span>
-          <span class="info-label">questions</span>
-        </div>
-        <div class="info-item">
-          <span class="info-number">6</span>
-          <span class="info-label">types</span>
-        </div>
-        <div class="info-item">
-          <span class="info-number">~15</span>
-          <span class="info-label">min</span>
-        </div>
-      </div>
-      <p class="welcome-desc">Theory, ear training, compressor matching, multiband and sidechain challenges.</p>
-      <button id="start-btn" class="btn btn-primary">Start Test</button>
-      <button id="continue-btn" class="btn btn-secondary" hidden>Continue</button>
+      <button id="start-btn" class="btn btn-primary" style="margin-top:24px">Начать тест</button>
     </div>
   </div>
 
@@ -48,14 +28,18 @@
   <div id="screen-question" class="screen">
     <div class="question-header">
       <div class="progress-info">
-        <span id="question-counter">1 / 20</span>
-        <span id="question-difficulty" class="difficulty-badge">beginner</span>
+        <span id="question-counter" class="counter">1 / 17</span>
+        <span id="question-type" class="type-badge"></span>
+        <span id="question-difficulty" class="diff-badge">beginner</span>
+        <button id="global-stop-btn" class="btn-stop" hidden>&#9724; Стоп</button>
       </div>
       <div class="progress-bar">
         <div class="progress-bar-fill" id="progress-fill"></div>
       </div>
     </div>
-    <div id="question-container" class="question-container"></div>
+    <div class="question-body">
+      <div id="question-container" class="question-container"></div>
+    </div>
   </div>
 
   <!-- Results Screen -->
@@ -63,15 +47,16 @@
     <div id="results-container" class="results-container"></div>
   </div>
 
-  <!-- Mascot (always visible overlay) -->
+  <!-- Mascot -->
   <div id="mascot" class="mascot" hidden>
     <div class="mascot-body" id="mascot-body"></div>
     <div class="mascot-bubble" id="mascot-bubble" hidden>
       <p class="mascot-text" id="mascot-text"></p>
     </div>
-    <button class="mascot-minimize" id="mascot-minimize" title="Hide mascot">_</button>
+    <button class="mascot-close" id="mascot-minimize" title="Скрыть">×</button>
   </div>
 
+  <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
   <script src="data/questions.js"></script>
   <script src="data/scoring-rules.js"></script>
   <script src="data/mascot-dialogue.js"></script>

@@ -18,16 +18,17 @@ const SCORING_RULES = {
   },
 
   levels: [
-    { id: 'newbie',       labelRu: 'Newbie',        minPercent: 0,  color: '#555570' },
-    { id: 'beginner',     labelRu: 'Beginner',      minPercent: 20, color: '#3498db' },
-    { id: 'intermediate', labelRu: 'Intermediate',  minPercent: 45, color: '#f39c12' },
-    { id: 'advanced',     labelRu: 'Advanced',      minPercent: 70, color: '#e74c3c' },
-    { id: 'pro',          labelRu: 'Pro',           minPercent: 90, color: '#6c5ce7' }
+    { id: 'newbie',       label: 'Новичок',       minPercent: 0,  color: '#4a4845' },
+    { id: 'beginner',     label: 'Начинающий',    minPercent: 20, color: '#5a9a5e' },
+    { id: 'intermediate', label: 'Уверенный',     minPercent: 45, color: '#c9a96e' },
+    { id: 'advanced',     label: 'Продвинутый',   minPercent: 70, color: '#b85450' },
+    { id: 'pro',          label: 'Микс-инженер',  minPercent: 90, color: '#c9a96e' }
   ],
 
   categories: {
-    theory:       { labelRu: 'Theory',    icon: 'T' },
-    ear_training: { labelRu: 'Ear',       icon: 'E' },
-    practical:    { labelRu: 'Practical',  icon: 'P' }
+    theory:       { label: 'Теория',           icon: 'T' },
+    ear_training: { label: 'Слух',             icon: 'S' },
+    practical:    { label: 'Практика',         icon: 'P' },
+    diagnostic:   { label: 'Диагностика',      icon: 'D' }
   }
 };
